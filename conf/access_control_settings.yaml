@@ -1,0 +1,3 @@
+- name: admin_1
+  enable: true
+  client_cert_path: C:/data/ivan/development/ra_service/conf/certs/ra_super_admin.cer

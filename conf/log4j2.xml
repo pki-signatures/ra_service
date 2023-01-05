@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Properties>
+        <Property name="LOG_PATTERN">
+            %d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n
+        </Property>
+    </Properties>
+    <Appenders>
+        <RollingFile name="FileAppenderRaService" fileName="C:/data/ivan/temp/logs/ra_service.log"
+                     filePattern="C:/data/ivan/temp/logs/ra_service-%d{yyyy-MM-dd}.log">
+            <PatternLayout>
+                <Pattern>${LOG_PATTERN}</Pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy/>
+            </Policies>
+            <DefaultRolloverStrategy fileIndex="nomax"/>
+        </RollingFile>
+        <RollingFile name="FileAppenderSpringBoot" fileName="C:/data/ivan/temp/logs/spring_boot_ra_service.log"
+                     filePattern="C:/data/ivan/temp/logs/spring_boot_ra_service-%d{yyyy-MM-dd}.log">
+            <PatternLayout>
+                <Pattern>${LOG_PATTERN}</Pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy/>
+            </Policies>
+            <DefaultRolloverStrategy fileIndex="nomax"/>
+        </RollingFile>
+    </Appenders>
+    <Loggers>
+        <Logger name="com.ivan.ra.service" level="info" additivity="false">
+            <AppenderRef ref="FileAppenderRaService" />
+        </Logger>
+
+        <Root level="info">
+            <AppenderRef ref="FileAppenderSpringBoot" />
+        </Root>
+    </Loggers>
+</Configuration>

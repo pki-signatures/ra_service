@@ -3,6 +3,7 @@ package com.ivan.ra.service.vo;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.ivan.ra.service.validator.NoWhiteSpace;
+import com.ivan.ra.service.validator.StatusValueCheck;
 import com.ivan.ra.service.validator.X509Cert;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -23,6 +24,7 @@ public class RegisterRaRequest {
     private String name;
 
     @NotBlank(message = "status must be present")
+    @StatusValueCheck
     @JsonProperty("status")
     private String status;
 

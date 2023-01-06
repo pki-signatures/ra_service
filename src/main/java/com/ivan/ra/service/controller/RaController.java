@@ -11,12 +11,12 @@ import com.ivan.ra.service.repository.RaAdminRepository;
 import com.ivan.ra.service.repository.RaOperatorRepository;
 import com.ivan.ra.service.repository.RaRepository;
 import com.ivan.ra.service.repository.RaRpRepository;
-import com.ivan.ra.service.vo.Errors;
+import com.ivan.ra.service.util.Util;
+import com.ivan.ra.service.vo.Ra;
 import com.ivan.ra.service.vo.RaAdmin;
 import com.ivan.ra.service.vo.RaOperator;
 import com.ivan.ra.service.vo.RaRp;
 import com.ivan.ra.service.vo.RegisterRaRequest;
-import com.ivan.ra.service.vo.Ra;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -49,6 +49,9 @@ import java.util.Set;
 @RestController
 @Validated
 public class RaController {
+
+    // TODO - get RA by name API end point
+
     @Autowired
     RaRepository raRepository;
     @Autowired
@@ -57,7 +60,11 @@ public class RaController {
     RaOperatorRepository raOperatorRepository;
     @Autowired
     RaRpRepository raRpRepository;
+    @Autowired
+    ErrorResponse errorResponse;
 
+    @Autowired
+    Util util;
     private static final Logger logger = LogManager.getLogger(RaController.class);
 
     @PostMapping(value = "/ra/v1/registration/authority", produces = "application/json", consumes = "application/json")
@@ -71,30 +78,30 @@ public class RaController {
             Optional<RegistrationAuthority> ra = raRepository.findById(registerRaRequest.getName());
             if (ra.isPresent()) {
                 logger.info("RA with this name already present: " + registerRaRequest.getName());
-                return generateErrorResponse("RA with this name already present: " + registerRaRequest.getName());
+                return errorResponse.generateErrorResponse("RA with this name already present: " + registerRaRequest.getName());
             }
-            String certDigest = getCertDigest(registerRaRequest.getRaAdminClientAuthCertificate());
+            String certDigest = util.getCertDigest(registerRaRequest.getRaAdminClientAuthCertificate());
             if (RaServiceCache.getAccessControlSettingsConfig(certDigest) != null) {
                 logger.info("RA admin certificate already configured in access control config file");
-                return generateErrorResponse("RA admin client certificate already configured. " +
+                return errorResponse.generateErrorResponse("RA admin client certificate already configured. " +
                         "Use other certificate");
             }
             List<RegistrationAuthorityAdmin> raAdmins = raAdminRepository.findRaAdminByClientCert(certDigest);
             if (raAdmins.size() != 0) {
                 logger.info("RA admin certificate is already configured under RA admin configurations");
-                return generateErrorResponse("RA admin client certificate already configured. " +
+                return errorResponse.generateErrorResponse("RA admin client certificate already configured. " +
                         "Use other certificate");
             }
             List<RegistrationAuthorityOperator> raOps = raOperatorRepository.findRaOperatorByClientCert(certDigest);
             if (raOps.size() != 0) {
                 logger.info("RA admin certificate is already configured under RA operator configurations");
-                return generateErrorResponse("RA admin client certificate already configured. " +
+                return errorResponse.generateErrorResponse("RA admin client certificate already configured. " +
                         "Use other certificate");
             }
             List<RegistrationAuthorityRelyingParty> raRps = raRpRepository.findRaRpByClientCert(certDigest);
             if (raRps.size() != 0) {
                 logger.info("RA admin certificate is already configured under RA relying party configurations");
-                return generateErrorResponse("RA admin client certificate already configured. " +
+                return errorResponse.generateErrorResponse("RA admin client certificate already configured. " +
                         "Use other certificate");
             }
 
@@ -107,7 +114,7 @@ public class RaController {
 
             Optional<RegistrationAuthorityAdmin> raAdmin = raAdminRepository.findById(registrationAuthorityPK);
             if (raAdmin.isPresent()) {
-                return generateErrorResponse("RA admin with this name already present: " + registerRaRequest.getName());
+                return errorResponse.generateErrorResponse("RA admin with this name already present: " + registerRaRequest.getName());
             }
 
             RegistrationAuthority regAuthority = new RegistrationAuthority();
@@ -177,7 +184,7 @@ public class RaController {
             Optional<RegistrationAuthority> ra = raRepository.findById(request.getName());
             if (ra.isEmpty()) {
                 logger.info("RA with this name not present: " + request.getName());
-                return generateErrorResponse("RA with this name not present: " + request.getName());
+                return errorResponse.generateErrorResponse("RA with this name not present: " + request.getName());
             }
             RegistrationAuthority regAuthority = ra.get();
             if (!StringUtils.isBlank(request.getStatus())) {
@@ -373,24 +380,5 @@ public class RaController {
             logger.info("TLS client authentication passed");
             return digest;
         }
-    }
-
-    private ResponseEntity generateErrorResponse(String errorMessage) {
-        List<String> errorsList = new ArrayList<>();
-        errorsList.add(errorMessage);
-
-        Errors errors = new Errors();
-        errors.setErrors(errorsList);
-        return ResponseEntity.badRequest().body(errors);
-    }
-
-    private String getCertDigest(String clientCert) throws Exception {
-        CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
-        X509Certificate cert = (X509Certificate) certFactory.generateCertificate(
-                new ByteArrayInputStream(Base64.getDecoder().decode(clientCert)));
-
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
-        md.update(cert.getEncoded());
-        return Base64.getEncoder().encodeToString(md.digest());
     }
 }

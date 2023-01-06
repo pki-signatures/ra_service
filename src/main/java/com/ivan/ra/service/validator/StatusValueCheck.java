@@ -12,11 +12,11 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 @Target({ FIELD })
 @Retention(RUNTIME)
-@Constraint(validatedBy = NoWhiteSpaceValidator.class)
+@Constraint(validatedBy = StatusValueCheckValidator.class)
 @Documented
-public @interface NoWhiteSpace {
+public @interface StatusValueCheck {
 
-    String message() default "white space must not be present";
+    String message() default "status must be either ENABLED or DISABLED";
 
     Class<?>[] groups() default { };
 

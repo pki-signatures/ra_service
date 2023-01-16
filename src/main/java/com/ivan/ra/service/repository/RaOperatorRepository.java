@@ -15,4 +15,11 @@ public interface RaOperatorRepository extends CrudRepository<RegistrationAuthori
 
     @Query("from RegistrationAuthorityOperator raOp where raOp.registrationAuthorityPK.registrationAuthority.name =:raName")
     List<RegistrationAuthorityOperator> findOperatorsByRa(@Param("raName") String raName);
+
+    @Query("from RegistrationAuthorityOperator raOp where raOp.registrationAuthorityPK.registrationAuthority.name =:raName and" +
+            " raOp.registrationAuthorityPK.name =:opName")
+    List<RegistrationAuthorityOperator> findOperatorByNameAndRa(@Param("raName") String raName, @Param("opName") String opName);
+
+    @Query("from RegistrationAuthorityOperator raOp where raOp.registrationAuthorityPK.registrationAuthority.name =:raName")
+    List<RegistrationAuthorityOperator> findAllOperatorsByRa(@Param("raName") String raName);
 }

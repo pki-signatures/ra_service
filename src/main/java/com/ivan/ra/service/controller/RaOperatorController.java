@@ -1,14 +1,17 @@
 package com.ivan.ra.service.controller;
 
+import com.ivan.ra.service.cache.RaServiceCache;
 import com.ivan.ra.service.constants.RaServiceConstants;
 import com.ivan.ra.service.model.RegistrationAuthorityAdmin;
+import com.ivan.ra.service.model.RegistrationAuthorityOperator;
 import com.ivan.ra.service.model.RegistrationAuthorityPK;
+import com.ivan.ra.service.model.RegistrationAuthorityRelyingParty;
 import com.ivan.ra.service.repository.RaAdminRepository;
 import com.ivan.ra.service.repository.RaOperatorRepository;
 import com.ivan.ra.service.repository.RaRpRepository;
 import com.ivan.ra.service.service.ClientCertAuthService;
 import com.ivan.ra.service.util.Util;
-import com.ivan.ra.service.vo.RaAdmin;
+import com.ivan.ra.service.vo.RaOperator;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -25,34 +28,42 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
+import java.security.MessageDigest;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
 @RestController
 @Validated
-public class RaAdminController {
+public class RaOperatorController {
     @Autowired
     RaAdminRepository raAdminRepository;
+
     @Autowired
     RaOperatorRepository raOperatorRepository;
+
     @Autowired
     RaRpRepository raRpRepository;
+
     @Autowired
     ErrorResponse errorResponse;
+
     @Autowired
     Util util;
+
     @Autowired
     ClientCertAuthService authService;
 
-    private static final Logger logger = LogManager.getLogger(RaAdminController.class);
+    private static final Logger logger = LogManager.getLogger(RaOperatorController.class);
 
-    @PostMapping(value = "/ra/v1/registration/authority/admin", produces = "application/json", consumes = "application/json")
-    public ResponseEntity registerRaAdmin(@Valid @RequestBody RaAdmin request, HttpServletRequest httpRequest) {
+    @PostMapping(value = "/ra/v1/registration/authority/operator", produces = "application/json", consumes = "application/json")
+    public ResponseEntity registerRaOperator(@Valid @RequestBody RaOperator request, HttpServletRequest httpRequest) {
         try {
-            logger.info("register new RA admin request received");
+            logger.info("register new RA operator request received");
             RegistrationAuthorityAdmin regAuthAdminAuth = authService.authenticateRaAdmin(httpRequest);
             if (regAuthAdminAuth == null) {
                 return errorResponse.generateErrorResponse("TLS client certificate authentication failed");
@@ -64,14 +75,14 @@ public class RaAdminController {
                     getStatus().equals(RaServiceConstants.STATUS_DISABLED)) {
                 return errorResponse.generateErrorResponse("RA status is disabled");
             }
-            if (!regAuthAdminAuth.getRole().contains(RaServiceConstants.CREATE_ADMINS)) {
-                return errorResponse.generateErrorResponse("RA admin not authorized to create further RA admins");
+            if (!regAuthAdminAuth.getRole().contains(RaServiceConstants.CREATE_OPERATORS)) {
+                return errorResponse.generateErrorResponse("RA admin not authorized to create further RA operators");
             }
-            List<RegistrationAuthorityAdmin> raAdmin = raAdminRepository.findAdminByNameAndRa(
+            List<RegistrationAuthorityOperator> raOperator = raOperatorRepository.findOperatorByNameAndRa(
                     regAuthAdminAuth.getRegistrationAuthorityPK().getRegistrationAuthority().getName(), request.getName());
-            if (raAdmin.size() != 0) {
-                logger.info("RA admin with this name already present: " + request.getName());
-                return errorResponse.generateErrorResponse("RA admin with this name already present: " + request.getName());
+            if (raOperator.size() != 0) {
+                logger.info("RA operator with this name already present: " + request.getName());
+                return errorResponse.generateErrorResponse("RA operator with this name already present: " + request.getName());
             }
             String certDigest = util.getCertDigest(request.getClientAuthCert());
             ResponseEntity error = authService.isClientCertAlreadyConfigured(certDigest);
@@ -82,13 +93,6 @@ public class RaAdminController {
             if (request.getRoles() != null && request.getRoles().length != 0) {
                 Set<String> temp = new LinkedHashSet<>(Arrays.asList(request.getRoles()));
                 rolesReq = temp.toArray(new String[temp.size()]);
-
-                List<String> rolesAssigned = Arrays.asList(regAuthAdminAuth.getRole().split(":"));
-                for (String roleReq : rolesReq) {
-                    if (!rolesAssigned.contains(roleReq)) {
-                        return errorResponse.generateErrorResponse("not authorized to assign this role to admin: " + roleReq);
-                    }
-                }
             } else {
                 return errorResponse.generateErrorResponse("roles must be present");
             }
@@ -97,15 +101,15 @@ public class RaAdminController {
             registrationAuthorityPK.setName(request.getName());
             registrationAuthorityPK.setRegistrationAuthority(regAuthAdminAuth.getRegistrationAuthorityPK().getRegistrationAuthority());
 
-            RegistrationAuthorityAdmin registrationAuthorityAdmin = new RegistrationAuthorityAdmin();
-            registrationAuthorityAdmin.setRegistrationAuthorityPK(registrationAuthorityPK);
-            registrationAuthorityAdmin.setRole(String.join(":", rolesReq));
-            registrationAuthorityAdmin.setStatus(request.getStatus());
-            registrationAuthorityAdmin.setClientAuthCert(request.getClientAuthCert());
-            registrationAuthorityAdmin.setClientAuthCertHash(certDigest);
-            registrationAuthorityAdmin.setEmailAddress(request.getEmailAddress());
-            raAdminRepository.save(registrationAuthorityAdmin);
-            logger.info("new RA admin registered successfully");
+            RegistrationAuthorityOperator registrationAuthorityOperator = new RegistrationAuthorityOperator();
+            registrationAuthorityOperator.setRegistrationAuthorityPK(registrationAuthorityPK);
+            registrationAuthorityOperator.setRole(String.join(":", rolesReq));
+            registrationAuthorityOperator.setStatus(request.getStatus());
+            registrationAuthorityOperator.setClientAuthCert(request.getClientAuthCert());
+            registrationAuthorityOperator.setClientAuthCertHash(certDigest);
+            registrationAuthorityOperator.setEmailAddress(request.getEmailAddress());
+            raOperatorRepository.save(registrationAuthorityOperator);
+            logger.info("new RA operator registered successfully");
 
             return ResponseEntity.ok().build();
         } catch (Exception ex) {
@@ -114,10 +118,10 @@ public class RaAdminController {
         }
     }
 
-    @PutMapping(value = "/ra/v1/registration/authority/admin", produces = "application/json", consumes = "application/json")
-    public ResponseEntity updateRaAdmin(@Valid @RequestBody RaAdmin request, HttpServletRequest httpRequest) {
+    @PutMapping(value = "/ra/v1/registration/authority/operator", produces = "application/json", consumes = "application/json")
+    public ResponseEntity updateRaOperator(@Valid @RequestBody RaOperator request, HttpServletRequest httpRequest) {
         try {
-            logger.info("update RA admin information request received");
+            logger.info("update RA operator information request received");
             RegistrationAuthorityAdmin regAuthAdminAuth = authService.authenticateRaAdmin(httpRequest);
             if (regAuthAdminAuth == null) {
                 return errorResponse.generateErrorResponse("TLS client certificate authentication failed");
@@ -129,16 +133,16 @@ public class RaAdminController {
                     getStatus().equals(RaServiceConstants.STATUS_DISABLED)) {
                 return errorResponse.generateErrorResponse("RA status is disabled");
             }
-            if (!regAuthAdminAuth.getRole().contains(RaServiceConstants.UPDATE_ADMINS)) {
-                return errorResponse.generateErrorResponse("RA admin not authorized to update further RA admins");
+            if (!regAuthAdminAuth.getRole().contains(RaServiceConstants.UPDATE_OPERATORS)) {
+                return errorResponse.generateErrorResponse("RA admin not authorized to update RA operators");
             }
-            List<RegistrationAuthorityAdmin> raAdmin = raAdminRepository.findAdminByNameAndRa(
+            List<RegistrationAuthorityOperator> raOperator = raOperatorRepository.findOperatorByNameAndRa(
                     regAuthAdminAuth.getRegistrationAuthorityPK().getRegistrationAuthority().getName(), request.getName());
-            if (raAdmin.size() == 0) {
-                logger.info("no RA admin with this name already present: " + request.getName());
-                return errorResponse.generateErrorResponse("no RA admin with this name already present: " + request.getName());
+            if (raOperator.size() == 0) {
+                logger.info("no RA operator with this name already present: " + request.getName());
+                return errorResponse.generateErrorResponse("no RA operator with this name already present: " + request.getName());
             }
-            RegistrationAuthorityAdmin regAuthAdmin = raAdmin.get(0);
+            RegistrationAuthorityOperator regAuthOp = raOperator.get(0);
 
             if (!StringUtils.isBlank(request.getClientAuthCert())) {
                 String certDigest = util.getCertDigest(request.getClientAuthCert());
@@ -146,33 +150,25 @@ public class RaAdminController {
                 if (error != null) {
                     return error;
                 }
-                regAuthAdmin.setClientAuthCert(request.getClientAuthCert());
-                regAuthAdmin.setClientAuthCertHash(certDigest);
+                regAuthOp.setClientAuthCert(request.getClientAuthCert());
+                regAuthOp.setClientAuthCertHash(certDigest);
             }
             if (!StringUtils.isBlank(request.getStatus())) {
-                regAuthAdmin.setStatus(request.getStatus());
+                regAuthOp.setStatus(request.getStatus());
             }
             if (!StringUtils.isBlank(request.getEmailAddress())) {
-                regAuthAdmin.setEmailAddress(request.getEmailAddress());
+                regAuthOp.setEmailAddress(request.getEmailAddress());
             }
             if (request.getRoles() != null && request.getRoles().length != 0) {
-                Set<String> tempReq = new LinkedHashSet<>(Arrays.asList(request.getRoles()));
-                String[] rolesReq = tempReq.toArray(new String[tempReq.size()]);
-                List<String> rolesAssigned = Arrays.asList(regAuthAdminAuth.getRole().split(":"));
-                for (String roleReq : rolesReq) {
-                    if (!rolesAssigned.contains(roleReq)) {
-                        return errorResponse.generateErrorResponse("not authorized to assign this role to admin: " + roleReq);
-                    }
-                }
-
-                List<String> rolesList = new ArrayList<>(Arrays.asList(regAuthAdmin.getRole().split(":")));
+                List<String> rolesList = new ArrayList<>(Arrays.asList(regAuthOp.getRole().split(":")));
                 rolesList.addAll(Arrays.asList(request.getRoles()));
+
                 Set<String> temp = new LinkedHashSet<>(rolesList);
                 String[] roles = temp.toArray(new String[temp.size()]);
-                regAuthAdmin.setRole(String.join(":", roles));
+                regAuthOp.setRole(String.join(":", roles));
             }
-            raAdminRepository.save(regAuthAdmin);
-            logger.info("RA admin updated successfully");
+            raOperatorRepository.save(regAuthOp);
+            logger.info("RA operator updated successfully");
 
             return ResponseEntity.ok().build();
         } catch (Exception ex) {
@@ -181,10 +177,10 @@ public class RaAdminController {
         }
     }
 
-    @GetMapping(value = "/ra/v1/registration/authority/admin", produces = "application/json")
-    public ResponseEntity getAllRaAdmins(HttpServletRequest httpRequest) {
+    @GetMapping(value = "/ra/v1/registration/authority/operator", produces = "application/json")
+    public ResponseEntity getAllRaOperators(HttpServletRequest httpRequest) {
         try {
-            logger.info("get all RA admins request received");
+            logger.info("get all RA operators request received");
             RegistrationAuthorityAdmin regAuthAdminAuth = authService.authenticateRaAdmin(httpRequest);
             if (regAuthAdminAuth == null) {
                 return errorResponse.generateErrorResponse("TLS client certificate authentication failed");
@@ -196,32 +192,32 @@ public class RaAdminController {
                     getStatus().equals(RaServiceConstants.STATUS_DISABLED)) {
                 return errorResponse.generateErrorResponse("RA status is disabled");
             }
-            if (!regAuthAdminAuth.getRole().contains(RaServiceConstants.READ_ADMINS)) {
+            if (!regAuthAdminAuth.getRole().contains(RaServiceConstants.READ_OPERATORS)) {
                 return errorResponse.generateErrorResponse("RA admin not authorized to get further RA admins information");
             }
-            List<RaAdmin> raAdminList = new ArrayList<>();
-            for (RegistrationAuthorityAdmin regAuthorityAdmin : raAdminRepository.findAllAdminsByRa(
+            List<RaOperator> raOperatorsList = new ArrayList<>();
+            for (RegistrationAuthorityOperator regAuthorityOp: raOperatorRepository.findAllOperatorsByRa(
                     regAuthAdminAuth.getRegistrationAuthorityPK().getRegistrationAuthority().getName())) {
-                RaAdmin raAdmin = new RaAdmin();
-                raAdmin.setName(regAuthorityAdmin.getRegistrationAuthorityPK().getName());
-                raAdmin.setEmailAddress(regAuthorityAdmin.getEmailAddress());
-                raAdmin.setClientAuthCert(regAuthorityAdmin.getClientAuthCert());
-                raAdmin.setStatus(regAuthorityAdmin.getStatus());
-                raAdmin.setRoles(regAuthorityAdmin.getRole().split(":"));
-                raAdminList.add(raAdmin);
+                RaOperator raOperator = new RaOperator();
+                raOperator.setName(regAuthorityOp.getRegistrationAuthorityPK().getName());
+                raOperator.setEmailAddress(regAuthorityOp.getEmailAddress());
+                raOperator.setClientAuthCert(regAuthorityOp.getClientAuthCert());
+                raOperator.setStatus(regAuthorityOp.getStatus());
+                raOperator.setRoles(regAuthorityOp.getRole().split(":"));
+                raOperatorsList.add(raOperator);
             }
-            logger.info("all RA admins information sent successfully");
-            return ResponseEntity.ok().body(raAdminList);
+            logger.info("all RA operators information sent successfully");
+            return ResponseEntity.ok().body(raOperatorsList);
         } catch (Exception ex) {
             logger.error("", ex);
             return ResponseEntity.internalServerError().build();
         }
     }
 
-    @GetMapping(value = "/ra/v1/registration/authority/admin/{name}", produces = "application/json")
-    public ResponseEntity getRaAdmin(@RequestParam("name") @NotBlank String name, HttpServletRequest httpRequest) {
+    @GetMapping(value = "/ra/v1/registration/authority/operator/{name}", produces = "application/json")
+    public ResponseEntity getRaOperator(@RequestParam("name") @NotBlank String name, HttpServletRequest httpRequest) {
         try {
-            logger.info("get RA admin by name request received");
+            logger.info("get RA operator by name request received");
             RegistrationAuthorityAdmin regAuthAdminAuth = authService.authenticateRaAdmin(httpRequest);
             if (regAuthAdminAuth == null) {
                 return errorResponse.generateErrorResponse("TLS client certificate authentication failed");
@@ -233,26 +229,26 @@ public class RaAdminController {
                     getStatus().equals(RaServiceConstants.STATUS_DISABLED)) {
                 return errorResponse.generateErrorResponse("RA status is disabled");
             }
-            if (!regAuthAdminAuth.getRole().contains(RaServiceConstants.READ_ADMINS)) {
-                return errorResponse.generateErrorResponse("RA admin not authorized to get further RA admins information");
+            if (!regAuthAdminAuth.getRole().contains(RaServiceConstants.READ_OPERATORS)) {
+                return errorResponse.generateErrorResponse("RA admin not authorized to get further RA operators information");
             }
-            List<RegistrationAuthorityAdmin> raAdminList = raAdminRepository.findAdminByNameAndRa(
+            List<RegistrationAuthorityOperator> regAuthOpsList = raOperatorRepository.findOperatorByNameAndRa(
                     regAuthAdminAuth.getRegistrationAuthorityPK().getRegistrationAuthority().getName(), name);
-            if (raAdminList.size() == 0) {
-                logger.info("no RA admin with this name already present: " + name);
+            if (regAuthOpsList.size() == 0) {
+                logger.info("no RA operator with this name already present: " + name);
                 return errorResponse.generateErrorResponse("no RA admin with this name already present: " + name);
             }
-            RegistrationAuthorityAdmin regAuthorityAdmin = raAdminList.get(0);
+            RegistrationAuthorityOperator regAuthorityOp = regAuthOpsList.get(0);
 
-            RaAdmin raAdmin = new RaAdmin();
-            raAdmin.setName(regAuthorityAdmin.getRegistrationAuthorityPK().getName());
-            raAdmin.setEmailAddress(regAuthorityAdmin.getEmailAddress());
-            raAdmin.setClientAuthCert(regAuthorityAdmin.getClientAuthCert());
-            raAdmin.setStatus(regAuthorityAdmin.getStatus());
-            raAdmin.setRoles(regAuthorityAdmin.getRole().split(":"));
+            RaOperator raOperator = new RaOperator();
+            raOperator.setName(regAuthorityOp.getRegistrationAuthorityPK().getName());
+            raOperator.setEmailAddress(regAuthorityOp.getEmailAddress());
+            raOperator.setClientAuthCert(regAuthorityOp.getClientAuthCert());
+            raOperator.setStatus(regAuthorityOp.getStatus());
+            raOperator.setRoles(regAuthorityOp.getRole().split(":"));
 
-            logger.info("RA admin by name information sent successfully");
-            return ResponseEntity.ok().body(raAdmin);
+            logger.info("RA operator by name information sent successfully");
+            return ResponseEntity.ok().body(raOperator);
         } catch (Exception ex) {
             logger.error("", ex);
             return ResponseEntity.internalServerError().build();

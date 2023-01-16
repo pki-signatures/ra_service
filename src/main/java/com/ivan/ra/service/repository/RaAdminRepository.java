@@ -15,6 +15,10 @@ public interface RaAdminRepository extends CrudRepository<RegistrationAuthorityA
     @Query("from RegistrationAuthorityAdmin raAdmin where raAdmin.registrationAuthorityPK.registrationAuthority.name =:raName")
     List<RegistrationAuthorityAdmin> findAdminsByRa(@Param("raName") String raName);
 
-    @Query("from RegistrationAuthorityAdmin raAdmin where raAdmin.registrationAuthorityPK.name =:name")
-    List<RegistrationAuthorityAdmin> findAdminByName(@Param("name") String name);
+    @Query("from RegistrationAuthorityAdmin raAdmin where raAdmin.registrationAuthorityPK.registrationAuthority.name =:raName and" +
+            " raAdmin.registrationAuthorityPK.name =:adminName")
+    List<RegistrationAuthorityAdmin> findAdminByNameAndRa(@Param("raName") String raName, @Param("adminName") String adminName);
+
+    @Query("from RegistrationAuthorityAdmin raAdmin where raAdmin.registrationAuthorityPK.registrationAuthority.name =:raName")
+    List<RegistrationAuthorityAdmin> findAllAdminsByRa(@Param("raName") String raName);
 }

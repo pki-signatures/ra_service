@@ -11,6 +11,7 @@ import com.ivan.ra.service.repository.RaAdminRepository;
 import com.ivan.ra.service.repository.RaOperatorRepository;
 import com.ivan.ra.service.repository.RaRepository;
 import com.ivan.ra.service.repository.RaRpRepository;
+import com.ivan.ra.service.service.ClientCertAuthService;
 import com.ivan.ra.service.util.Util;
 import com.ivan.ra.service.vo.Ra;
 import com.ivan.ra.service.vo.RaAdmin;
@@ -33,13 +34,8 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
-import java.io.ByteArrayInputStream;
-import java.security.MessageDigest;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -49,9 +45,6 @@ import java.util.Set;
 @RestController
 @Validated
 public class RaController {
-
-    // TODO - get RA by name API end point
-
     @Autowired
     RaRepository raRepository;
     @Autowired
@@ -62,47 +55,29 @@ public class RaController {
     RaRpRepository raRpRepository;
     @Autowired
     ErrorResponse errorResponse;
-
     @Autowired
     Util util;
+    @Autowired
+    ClientCertAuthService authService;
     private static final Logger logger = LogManager.getLogger(RaController.class);
 
     @PostMapping(value = "/ra/v1/registration/authority", produces = "application/json", consumes = "application/json")
     public ResponseEntity registerRa(@Valid @RequestBody RegisterRaRequest registerRaRequest, HttpServletRequest httpRequest) {
         try {
             logger.info("register RA request received");
-//        String clientCertDigest = authenticate(httpRequest);
-//        if (clientCertDigest == null) {
-//            return generateErrorResponse("TLS client certificate authentication failed");
-//        }
+            String clientCertDigest = authService.authenticateSuperAdmins(httpRequest);
+            if (clientCertDigest == null) {
+                return errorResponse.generateErrorResponse("TLS client certificate authentication failed");
+            }
+            String certDigest = util.getCertDigest(registerRaRequest.getRaAdminClientAuthCertificate());
+            ResponseEntity error = authService.isClientCertAlreadyConfigured(certDigest);
+            if (error != null) {
+                return error;
+            }
             Optional<RegistrationAuthority> ra = raRepository.findById(registerRaRequest.getName());
             if (ra.isPresent()) {
                 logger.info("RA with this name already present: " + registerRaRequest.getName());
                 return errorResponse.generateErrorResponse("RA with this name already present: " + registerRaRequest.getName());
-            }
-            String certDigest = util.getCertDigest(registerRaRequest.getRaAdminClientAuthCertificate());
-            if (RaServiceCache.getAccessControlSettingsConfig(certDigest) != null) {
-                logger.info("RA admin certificate already configured in access control config file");
-                return errorResponse.generateErrorResponse("RA admin client certificate already configured. " +
-                        "Use other certificate");
-            }
-            List<RegistrationAuthorityAdmin> raAdmins = raAdminRepository.findRaAdminByClientCert(certDigest);
-            if (raAdmins.size() != 0) {
-                logger.info("RA admin certificate is already configured under RA admin configurations");
-                return errorResponse.generateErrorResponse("RA admin client certificate already configured. " +
-                        "Use other certificate");
-            }
-            List<RegistrationAuthorityOperator> raOps = raOperatorRepository.findRaOperatorByClientCert(certDigest);
-            if (raOps.size() != 0) {
-                logger.info("RA admin certificate is already configured under RA operator configurations");
-                return errorResponse.generateErrorResponse("RA admin client certificate already configured. " +
-                        "Use other certificate");
-            }
-            List<RegistrationAuthorityRelyingParty> raRps = raRpRepository.findRaRpByClientCert(certDigest);
-            if (raRps.size() != 0) {
-                logger.info("RA admin certificate is already configured under RA relying party configurations");
-                return errorResponse.generateErrorResponse("RA admin client certificate already configured. " +
-                        "Use other certificate");
             }
 
             RegistrationAuthority registrationAuthority = new RegistrationAuthority();
@@ -177,10 +152,10 @@ public class RaController {
     public ResponseEntity updateRa(@Valid @RequestBody Ra request, HttpServletRequest httpRequest) {
         try {
             logger.info("update RA information request received");
-//            String clientCertDigest = authenticate(httpRequest);
-//            if (clientCertDigest == null) {
-//                return generateErrorResponse("TLS client certificate authentication failed");
-//            }
+            String clientCertDigest = authService.authenticateSuperAdmins(httpRequest);
+            if (clientCertDigest == null) {
+                return errorResponse.generateErrorResponse("TLS client certificate authentication failed");
+            }
             Optional<RegistrationAuthority> ra = raRepository.findById(request.getName());
             if (ra.isEmpty()) {
                 logger.info("RA with this name not present: " + request.getName());
@@ -245,10 +220,10 @@ public class RaController {
     public ResponseEntity getAllRas(HttpServletRequest httpRequest) {
         try {
             logger.info("get all RA information request received");
-//            String clientCertDigest = authenticate(httpRequest);
-//            if (clientCertDigest == null) {
-//                return generateErrorResponse("TLS client certificate authentication failed");
-//            }
+            String clientCertDigest = authService.authenticateSuperAdmins(httpRequest);
+            if (clientCertDigest == null) {
+                return errorResponse.generateErrorResponse("TLS client certificate authentication failed");
+            }
             List<Ra> ras = new ArrayList<>();
             for (RegistrationAuthority regAuth : raRepository.findAll()) {
                 Ra ra = new Ra();
@@ -276,14 +251,53 @@ public class RaController {
         }
     }
 
+    @GetMapping(value = "/ra/v1/registration/authority/{name}", produces = "application/json")
+    public ResponseEntity getRa(@RequestParam("name") @NotBlank String name, HttpServletRequest httpRequest) {
+        try {
+            logger.info("get RA by name request received");
+            String clientCertDigest = authService.authenticateSuperAdmins(httpRequest);
+            if (clientCertDigest == null) {
+                return errorResponse.generateErrorResponse("TLS client certificate authentication failed");
+            }
+            Optional<RegistrationAuthority> raPresent = raRepository.findById(name);
+            if (raPresent.isEmpty()) {
+                logger.info("RA with this name not present: " + name);
+                return errorResponse.generateErrorResponse("RA with this name not present: " + name);
+            }
+            RegistrationAuthority regAuth = raPresent.get();
+
+            Ra ra = new Ra();
+            ra.setName(regAuth.getName());
+            ra.setStatus(regAuth.getStatus());
+            ra.setOrganizationName(regAuth.getOrganizationName());
+            ra.setOrganizationAddress(regAuth.getOrganizationAddress());
+            ra.setOrganizationCity(regAuth.getOrganizationCity());
+            ra.setOrganizationProvince(regAuth.getOrganizationProvince());
+            ra.setOrganizationCountry(regAuth.getOrganizationCountry());
+            ra.setPrimaryContactName(regAuth.getPrimaryContactName());
+            ra.setPrimaryContactNo(regAuth.getPrimaryContactNo());
+            ra.setPrimaryContactEmailAddress(regAuth.getPrimaryContactEmailAddress());
+            ra.setSecondaryContactName(regAuth.getSecondaryContactName());
+            ra.setSecondaryContactNo(regAuth.getSecondaryContactNo());
+            ra.setSecondaryContactEmailAddress(regAuth.getSecondaryContactEmailAddress());
+            ra.setRaProfiles(regAuth.getRaProfiles().split(":"));
+
+            logger.info("RA information sent successfully");
+            return ResponseEntity.ok().body(ra);
+        } catch (Exception ex) {
+            logger.error("", ex);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
     @GetMapping(value = "/ra/v1/registration/authority/admins/{name}", produces = "application/json")
     public ResponseEntity getAllAdminsByRa(@RequestParam("name") @NotBlank String name, HttpServletRequest httpRequest) {
         try {
             logger.info("get all RA admins by RA request received");
-//            String clientCertDigest = authenticate(httpRequest);
-//            if (clientCertDigest == null) {
-//                return generateErrorResponse("TLS client certificate authentication failed");
-//            }
+            String clientCertDigest = authService.authenticateSuperAdmins(httpRequest);
+            if (clientCertDigest == null) {
+                return errorResponse.generateErrorResponse("TLS client certificate authentication failed");
+            }
             List<RaAdmin> raAdminsList = new ArrayList<>();
             for (RegistrationAuthorityAdmin regAuthAdmin : raAdminRepository.findAdminsByRa(name)) {
                 RaAdmin raAdmin = new RaAdmin();
@@ -307,10 +321,10 @@ public class RaController {
     public ResponseEntity getAllOperatorsByRa(@RequestParam("name") @NotBlank String name, HttpServletRequest httpRequest) {
         try {
             logger.info("get all RA operators by RA request received");
-//            String clientCertDigest = authenticate(httpRequest);
-//            if (clientCertDigest == null) {
-//                return generateErrorResponse("TLS client certificate authentication failed");
-//            }
+            String clientCertDigest = authService.authenticateSuperAdmins(httpRequest);
+            if (clientCertDigest == null) {
+                return errorResponse.generateErrorResponse("TLS client certificate authentication failed");
+            }
             List<RaOperator> raAdminsList = new ArrayList<>();
             for (RegistrationAuthorityOperator regAuthOp : raOperatorRepository.findOperatorsByRa(name)) {
                 RaOperator raOperator = new RaOperator();
@@ -334,10 +348,10 @@ public class RaController {
     public ResponseEntity getAllRpsByRa(@RequestParam("name") @NotBlank String name, HttpServletRequest httpRequest) {
         try {
             logger.info("get all RA relying parties by RA request received");
-//            String clientCertDigest = authenticate(httpRequest);
-//            if (clientCertDigest == null) {
-//                return generateErrorResponse("TLS client certificate authentication failed");
-//            }
+            String clientCertDigest = authService.authenticateSuperAdmins(httpRequest);
+            if (clientCertDigest == null) {
+                return errorResponse.generateErrorResponse("TLS client certificate authentication failed");
+            }
             List<RaRp> raRpList = new ArrayList<>();
             for (RegistrationAuthorityRelyingParty regAuthRp : raRpRepository.findRpsByRa(name)) {
                 RaRp raRp = new RaRp();
@@ -361,24 +375,4 @@ public class RaController {
         }
     }
 
-    private String authenticate(HttpServletRequest httpRequest) throws Exception {
-        X509Certificate[] certs = (X509Certificate[]) httpRequest.getAttribute("javax.servlet.request.X509Certificate");
-        if (certs == null || certs.length == 0) {
-            logger.info("TLS client certificate must be present in request");
-            return null;
-        }
-        logger.info("TLS client certificate received in request with subject :" + certs[0].getSubjectDN());
-
-        MessageDigest md = MessageDigest.getInstance("SHA-256");
-        md.update(certs[0].getEncoded());
-        String digest = Base64.getEncoder().encodeToString(md.digest());
-
-        if (RaServiceCache.getAccessControlSettingsConfig(digest) == null) {
-            logger.info("TLS client authentication failed");
-            return null;
-        } else {
-            logger.info("TLS client authentication passed");
-            return digest;
-        }
-    }
 }

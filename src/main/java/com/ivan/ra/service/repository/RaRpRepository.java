@@ -15,4 +15,11 @@ public interface RaRpRepository extends CrudRepository<RegistrationAuthorityRely
 
     @Query("from RegistrationAuthorityRelyingParty raRp where raRp.registrationAuthorityPK.registrationAuthority.name =:raName")
     List<RegistrationAuthorityRelyingParty> findRpsByRa(@Param("raName") String raName);
+
+    @Query("from RegistrationAuthorityRelyingParty raRp where raRp.registrationAuthorityPK.registrationAuthority.name =:raName and" +
+            " raRp.registrationAuthorityPK.name =:rpName")
+    List<RegistrationAuthorityRelyingParty> findRpByNameAndRa(@Param("raName") String raName, @Param("rpName") String rpName);
+
+    @Query("from RegistrationAuthorityRelyingParty raRp where raRp.registrationAuthorityPK.registrationAuthority.name =:raName")
+    List<RegistrationAuthorityRelyingParty> findAllRpsByRa(@Param("raName") String raName);
 }

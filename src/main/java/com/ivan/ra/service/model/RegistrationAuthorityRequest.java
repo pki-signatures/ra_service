@@ -54,12 +54,6 @@ public class RegistrationAuthorityRequest {
     @OneToOne
     private RequestSubjectInfo requestSubjectInfo;
 
-    @JoinColumns({
-            @JoinColumn(name = "certificate_subject_id", referencedColumnName = "id")
-    })
-    @OneToOne
-    private CertificateSubjectInfo certSubjectInfo;
-
     @CreationTimestamp
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createDateTime;

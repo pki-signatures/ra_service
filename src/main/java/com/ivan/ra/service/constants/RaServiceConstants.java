@@ -20,4 +20,14 @@ public class RaServiceConstants {
     public static final String CREATE_REQUESTS = "CREATE_REQUESTS";
     public static final String READ_REQUESTS = "READ_REQUESTS";
     public static final String UPDATE_REQUESTS = "UPDATE_REQUESTS";
+    public static final String APPROVE_REQUESTS = "APPROVE_REQUESTS";
+    public static final String REJECT_REQUESTS = "REJECT_REQUESTS";
+
+    public static final String REQUEST_STATUS_PENDING = "PENDING";
+    public static final String REQUEST_STATUS_PROCESSING = "PROCESSING";
+    public static final String REQUEST_STATUS_APPROVED = "APPROVED";
+    public static final String REQUEST_STATUS_REJECTED = "REJECTED";
+    public static final String REQUEST_STATUS_ISSUED = "ISSUED";
+
+
 }

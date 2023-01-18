@@ -76,6 +76,28 @@ public class ClientCertAuthService {
         }
     }
 
+    public RegistrationAuthorityOperator authenticateRaOperator(HttpServletRequest httpRequest) throws Exception {
+        X509Certificate[] certs = (X509Certificate[]) httpRequest.getAttribute("javax.servlet.request.X509Certificate");
+        if (certs == null || certs.length == 0) {
+            logger.info("TLS client certificate must be present in request");
+            return null;
+        }
+        logger.info("TLS client certificate received in request with subject :" + certs[0].getSubjectDN());
+
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        md.update(certs[0].getEncoded());
+        String digest = Base64.getEncoder().encodeToString(md.digest());
+
+        List<RegistrationAuthorityOperator> raOperatorsList = raOperatorRepository.findRaOperatorByClientCert(digest);
+        if (raOperatorsList.size() == 0) {
+            logger.info("TLS client authentication failed");
+            return null;
+        } else {
+            return raOperatorsList.get(0);
+        }
+    }
+
+
     public ResponseEntity isClientCertAlreadyConfigured(String certDigest) throws Exception {
         if (RaServiceCache.getAccessControlSettingsConfig(certDigest) != null) {
             logger.info("certificate already configured in access control config file");

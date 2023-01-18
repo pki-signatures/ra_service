@@ -29,5 +29,14 @@ public class RaServiceConstants {
     public static final String REQUEST_STATUS_REJECTED = "REJECTED";
     public static final String REQUEST_STATUS_ISSUED = "ISSUED";
 
+    public static final String COMMON_NAME = "common_name";
+    public static final String GIVEN_NAME = "given_name";
+    public static final String SURNAME = "surname";
+    public static final String ORGANIZATION = "organization";
+    public static final String ORGANIZATION_UNIT = "organization_unit";
+    public static final String ORGANIZATION_IDENTIFIER = "organization_identifier";
+    public static final String COUNTRY = "country";
+    public static final String SERIAL_NUMBER = "serial_number";
+
 
 }

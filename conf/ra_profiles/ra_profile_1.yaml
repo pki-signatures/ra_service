@@ -1,0 +1,19 @@
+#Name of the RA profile. This name must be unique.
+name: ra_profile_1
+
+# Following are the RDNs that can be configured here
+#
+# common_name
+# given_name
+# surname
+# organization
+# organization_unit
+# organization_identifier
+# country
+# serial_number
+subject_info:
+  country: "ES"
+  serial_number: ""
+  common_name: ""
+  surname: ""
+  given_name: ""

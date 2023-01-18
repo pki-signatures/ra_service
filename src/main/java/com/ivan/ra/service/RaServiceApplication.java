@@ -19,6 +19,9 @@ public class RaServiceApplication implements CommandLineRunner {
 	@Value("${access.control.settings.path}")
 	private String accessControlSettingsPath;
 
+	@Value("${ra.profiles.dir.path}")
+	private String raProfilesDirPath;
+
 	public static void main(String[] args) {
 		SpringApplication.run(RaServiceApplication.class, args);
 	}
@@ -27,6 +30,7 @@ public class RaServiceApplication implements CommandLineRunner {
 		Security.addProvider(new BouncyCastleProvider());
 
 		RaServiceCache.loadAccessControlSettings(accessControlSettingsPath);
+		RaServiceCache.loadRaProfiles(raProfilesDirPath);
 		logger.info("RA service started successfully");
 	}
 }

@@ -61,6 +61,18 @@ public class RaRequestController {
     @Value("${validation.docs.path}")
     private String validationDocDirPath;
 
+    @Value("${ssa.client.auth.p12.path}")
+    private String ssaClientAuthP12Path;
+
+    @Value("${ssa.client.auth.p12.password}")
+    private String ssaClientAuthP12Password;
+
+    @Value("${ca.client.auth.p12.path}")
+    private String caClientAuthP12Path;
+
+    @Value("${ca.client.auth.p12.password}")
+    private String caClientAuthP12Password;
+
     private static final Logger logger = LogManager.getLogger(RaRequestController.class);
 
     @PostMapping(value = "/ra/v1/registration/authority/request", produces = "application/json", consumes = "application/json")

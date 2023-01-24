@@ -1,5 +1,6 @@
 package com.ivan.ra.service.service;
 
+import com.ivan.ra.service.cache.AccessControlSettingsConfig;
 import com.ivan.ra.service.cache.RaServiceCache;
 import com.ivan.ra.service.controller.ErrorResponse;
 import com.ivan.ra.service.model.RegistrationAuthorityAdmin;
@@ -46,7 +47,8 @@ public class ClientCertAuthService {
         md.update(certs[0].getEncoded());
         String digest = Base64.getEncoder().encodeToString(md.digest());
 
-        if (RaServiceCache.getAccessControlSettingsConfig(digest) == null) {
+        AccessControlSettingsConfig config = RaServiceCache.getAccessControlSettingsConfig(digest);
+        if (config == null || !config.isEnable()) {
             logger.info("TLS client authentication failed");
             return null;
         } else {

@@ -26,6 +26,7 @@ public class RaServiceApplication implements CommandLineRunner {
 		SpringApplication.run(RaServiceApplication.class, args);
 	}
 
+	@Override
 	public void run(String... args) throws Exception {
 		Security.addProvider(new BouncyCastleProvider());
 

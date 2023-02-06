@@ -1,5 +1,6 @@
 package com.ivan.ra.service.controller;
 
+import com.ivan.ra.service.clients.SsaClient;
 import com.ivan.ra.service.config.ra.profile.SubjectInfoVO;
 import com.ivan.ra.service.constants.RaServiceConstants;
 import com.ivan.ra.service.model.QRegistrationAuthorityRequest;
@@ -9,6 +10,7 @@ import com.ivan.ra.service.model.RegistrationAuthorityRequestPK;
 import com.ivan.ra.service.model.RequestSubjectInfo;
 import com.ivan.ra.service.repository.RaRequestRepository;
 import com.ivan.ra.service.service.ClientCertAuthService;
+import com.ivan.ra.service.service.EmailService;
 import com.ivan.ra.service.service.RaProfileCompatibilityChecker;
 import com.ivan.ra.service.vo.ApproveRaRequest;
 import com.ivan.ra.service.vo.RaRequest;
@@ -57,7 +59,11 @@ public class RaRequestController {
     RaProfileCompatibilityChecker profileCompatibilityChecker;
     @Autowired
     RaRequestRepository raRequestRepository;
+    @Autowired
+    SsaClient ssaClient;
 
+    @Autowired
+    EmailService emailService;
     @Value("${validation.docs.path}")
     private String validationDocDirPath;
 
@@ -72,6 +78,15 @@ public class RaRequestController {
 
     @Value("${ca.client.auth.p12.password}")
     private String caClientAuthP12Password;
+
+    @Value("${email.templates.dir.path}")
+    private String emailTemplatesDirPath;
+
+    @Value("${web.pages.dir.path}")
+    private String webPagesDirPath;
+
+    @Value("${ra.service.url}")
+    private String raServiceUrl;
 
     private static final Logger logger = LogManager.getLogger(RaRequestController.class);
 
@@ -133,7 +148,7 @@ public class RaRequestController {
 
             RegistrationAuthorityRequest regAuthReq = new RegistrationAuthorityRequest();
             regAuthReq.setEmailAddress(request.getEmailAddress());
-            regAuthReq.setStatus(RaServiceConstants.REQUEST_STATUS_PENDING);
+            regAuthReq.setStatus(RaServiceConstants.CERTIFICATE_REQUEST_PENDING);
             regAuthReq.setMobileNo(request.getMobileNo());
             regAuthReq.setRaProfile(request.getRaProfile());
             regAuthReq.setRegistrationAuthorityRequestPK(regAuthReqPk);
@@ -182,10 +197,10 @@ public class RaRequestController {
                 regAuthReq.setMobileNo(request.getMobileNo());
             }
             if (!StringUtils.isBlank(request.getStatus()) && !request.getStatus().equals(
-                    RaServiceConstants.REQUEST_STATUS_PROCESSING)) {
-                return errorResponse.generateErrorResponse("only allowed status: " + RaServiceConstants.REQUEST_STATUS_PROCESSING);
+                    RaServiceConstants.CERTIFICATE_REQUEST_PROCESSING)) {
+                return errorResponse.generateErrorResponse("only allowed status: " + RaServiceConstants.CERTIFICATE_REQUEST_PROCESSING);
             } else {
-                regAuthReq.setStatus(RaServiceConstants.REQUEST_STATUS_PROCESSING);
+                regAuthReq.setStatus(RaServiceConstants.CERTIFICATE_REQUEST_PROCESSING);
             }
 
             RequestSubjectInfo subjectInfo = regAuthReq.getRequestSubjectInfo();
@@ -409,12 +424,118 @@ public class RaRequestController {
 
     @PostMapping(value = "/ra/v1/registration/authority/request/approve", consumes = "application/json")
     public ResponseEntity approveRequest(@Valid @RequestBody ApproveRaRequest request, HttpServletRequest httpRequest) {
-        return null;
+        try {
+            logger.info("approve certificate issuance request received");
+            RegistrationAuthorityOperator regAuthOperatorAuth = authService.authenticateRaOperator(httpRequest);
+            if (regAuthOperatorAuth == null) {
+                return errorResponse.generateErrorResponse("TLS client certificate authentication failed");
+            }
+            if (regAuthOperatorAuth.getStatus().equals(RaServiceConstants.STATUS_DISABLED)) {
+                return errorResponse.generateErrorResponse("RA operator status is disabled");
+            }
+            if (regAuthOperatorAuth.getRegistrationAuthorityPK().getRegistrationAuthority().
+                    getStatus().equals(RaServiceConstants.STATUS_DISABLED)) {
+                return errorResponse.generateErrorResponse("RA status is disabled");
+            }
+            if (!regAuthOperatorAuth.getRole().contains(RaServiceConstants.APPROVE_REQUESTS)) {
+                return errorResponse.generateErrorResponse("RA operator not authorized to approve requests");
+            }
+            List<RegistrationAuthorityRequest> reqList = raRequestRepository.findRequestByIdAndRa(request.getRequestId(),
+                regAuthOperatorAuth.getRegistrationAuthorityPK().getRegistrationAuthority().getName());
+            if (reqList.size() == 0) {
+                logger.info("no request with this ID already present: " + request.getRequestId());
+                return errorResponse.generateErrorResponse("no request with this ID already present: " + request.getRequestId());
+            }
+            RegistrationAuthorityRequest regAuthReq = reqList.get(0);
+            if (!regAuthReq.getStatus().equals(RaServiceConstants.CERTIFICATE_REQUEST_PROCESSING)) {
+                return errorResponse.generateErrorResponse("request status must "+
+                    RaServiceConstants.CERTIFICATE_REQUEST_PROCESSING + " to approve this request");
+            }
+
+            String raName = regAuthReq.getRegistrationAuthorityRequestPK().getRegistrationAuthority().getName();
+            String requestId = regAuthReq.getRegistrationAuthorityRequestPK().getId();
+            String ssaId = null;
+            try {
+                ssaId = ssaClient.sendInitializeRequest(regAuthReq.getMobileNo(), raName, requestId);
+                regAuthReq.setSsaId(ssaId);
+                raRequestRepository.save(regAuthReq);
+                logger.info("SSA request initialized with id: " + ssaId);
+            } catch (Exception ex) {
+                logger.error("", ex);
+                return errorResponse.generateErrorResponse("error approving request, unable to initialize the SSA against request: "
+                    + regAuthReq.getRegistrationAuthorityRequestPK().getId());
+            }
+            // Send certificate register email
+            Path path = Paths.get(emailTemplatesDirPath + raName + "/cert_register_email.html");
+            String emailTemplate = new String(Files.readAllBytes(path));
+            String certRegisterLink = raServiceUrl + "ra/v1/register/" +raName+"/"+requestId;
+            emailTemplate = emailTemplate.replace("<CERT_REGISTER_LINK>", certRegisterLink);
+            emailService.sendCertRegisterEmail(regAuthReq.getEmailAddress(), emailTemplate);
+            logger.info("email sent for request id: " + requestId + " and RA: " + raName);
+
+            // Send OTP
+            ssaClient.sendOtp(ssaId);
+            logger.info("OTP sent for certificate registration");
+
+            regAuthReq.setStatus(RaServiceConstants.CERTIFICATE_REQUEST_APPROVED);
+            raRequestRepository.save(regAuthReq);
+            logger.info("approve certificate issuance response sent");
+            return ResponseEntity.ok().build();
+        } catch (Exception ex) {
+            logger.error("", ex);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     @PostMapping(value = "/ra/v1/registration/authority/request/reject", consumes = "application/json")
     public ResponseEntity rejectRequest(@Valid @RequestBody RejectRaRequest request, HttpServletRequest httpRequest) {
-        return null;
+        try {
+            logger.info("reject certificate issuance request received");
+            RegistrationAuthorityOperator regAuthOperatorAuth = authService.authenticateRaOperator(httpRequest);
+            if (regAuthOperatorAuth == null) {
+                return errorResponse.generateErrorResponse("TLS client certificate authentication failed");
+            }
+            if (regAuthOperatorAuth.getStatus().equals(RaServiceConstants.STATUS_DISABLED)) {
+                return errorResponse.generateErrorResponse("RA operator status is disabled");
+            }
+            if (regAuthOperatorAuth.getRegistrationAuthorityPK().getRegistrationAuthority().
+                getStatus().equals(RaServiceConstants.STATUS_DISABLED)) {
+                return errorResponse.generateErrorResponse("RA status is disabled");
+            }
+            if (!regAuthOperatorAuth.getRole().contains(RaServiceConstants.REJECT_REQUESTS)) {
+                return errorResponse.generateErrorResponse("RA operator not authorized to reject requests");
+            }
+            List<RegistrationAuthorityRequest> reqList = raRequestRepository.findRequestByIdAndRa(request.getRequestId(),
+                regAuthOperatorAuth.getRegistrationAuthorityPK().getRegistrationAuthority().getName());
+            if (reqList.size() == 0) {
+                logger.info("no request with this ID already present: " + request.getRequestId());
+                return errorResponse.generateErrorResponse("no request with this ID already present: " + request.getRequestId());
+            }
+            RegistrationAuthorityRequest regAuthReq = reqList.get(0);
+            if (!regAuthReq.getStatus().equals(RaServiceConstants.CERTIFICATE_REQUEST_PROCESSING)) {
+                return errorResponse.generateErrorResponse("request status must "+
+                    RaServiceConstants.CERTIFICATE_REQUEST_PROCESSING + " to reject this request");
+            }
+            // Send rejection email
+            String raName = regAuthReq.getRegistrationAuthorityRequestPK().getRegistrationAuthority().getName();
+            String requestId = regAuthReq.getRegistrationAuthorityRequestPK().getId();
+
+            Path path = Paths.get(emailTemplatesDirPath + raName + "/request_rejection_email.html");
+            String emailTemplate = new String(Files.readAllBytes(path));
+            emailTemplate = emailTemplate.replace("<REQUEST_ID>", requestId);
+            emailTemplate = emailTemplate.replace("<REJECTION_REASON>", request.getRejectionReason());
+            emailService.sendRequestRejectionEmail(regAuthReq.getEmailAddress(), emailTemplate);
+            logger.info("rejection email sent for request id: " + requestId + " and RA: " + raName);
+
+            regAuthReq.setStatus(RaServiceConstants.CERTIFICATE_REQUEST_REJECTED);
+            regAuthReq.setRejectionReason(request.getRejectionReason());
+            raRequestRepository.save(regAuthReq);
+            logger.info("reject certificate issuance response sent");
+            return ResponseEntity.ok().build();
+        } catch (Exception ex) {
+            logger.error("", ex);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     // Handle revocation request

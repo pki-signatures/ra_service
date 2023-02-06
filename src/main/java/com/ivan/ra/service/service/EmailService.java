@@ -46,6 +46,9 @@ public class EmailService {
   @Value("${cert.register.email.pin}")
   private String certRegisterEmailPin;
 
+  @Value("${cert.request.rejection.email.subject}")
+  private String certRequestRejectionEmailSubject;
+
   public void sendCertRegisterEmail(String toEmailAddress, String body) throws Exception {
       sendEmail(toEmailAddress, certRegisterEmailSubject, body);
   }
@@ -56,6 +59,10 @@ public class EmailService {
 
   public void sendCertRegisterPinEmail(String toEmailAddress, String body) throws Exception {
     sendEmail(toEmailAddress, certRegisterEmailPin, body);
+  }
+
+  public void sendRequestRejectionEmail(String toEmailAddress, String body) throws Exception {
+    sendEmail(toEmailAddress, certRequestRejectionEmailSubject, body);
   }
 
   private void sendEmail(String toEmailAddress, String subject, String body) throws Exception {

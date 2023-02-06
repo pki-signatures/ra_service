@@ -23,11 +23,13 @@ public class RaServiceConstants {
     public static final String APPROVE_REQUESTS = "APPROVE_REQUESTS";
     public static final String REJECT_REQUESTS = "REJECT_REQUESTS";
 
-    public static final String REQUEST_STATUS_PENDING = "PENDING";
-    public static final String REQUEST_STATUS_PROCESSING = "PROCESSING";
-    public static final String REQUEST_STATUS_APPROVED = "APPROVED";
-    public static final String REQUEST_STATUS_REJECTED = "REJECTED";
-    public static final String REQUEST_STATUS_ISSUED = "ISSUED";
+    public static final String CERTIFICATE_REQUEST_PENDING = "CERTIFICATE_REQUEST_PENDING";
+    public static final String CERTIFICATE_REQUEST_PROCESSING = "CERTIFICATE_REQUEST_PROCESSING";
+    public static final String CERTIFICATE_REQUEST_APPROVED = "CERTIFICATE_REQUEST_APPROVED";
+    public static final String CERTIFICATE_REQUEST_REJECTED = "CERTIFICATE_REQUEST_REJECTED";
+    public static final String CERTIFICATE_REQUEST_KEYPAIR_GENERATED_SSA = "CERTIFICATE_REQUEST_KEYPAIR_GENERATED_SSA";
+    public static final String CERTIFICATE_REQUEST_CERT_ISSUED_CA = "CERTIFICATE_REQUEST_CERT_ISSUED_CA";
+    public static final String CERTIFICATE_REQUEST_CERT_IMPORTED_SSA = "CERTIFICATE_REQUEST_CERT_IMPORTED_SSA";
 
     public static final String COMMON_NAME = "common_name";
     public static final String GIVEN_NAME = "given_name";

@@ -31,6 +31,11 @@ public class RaServiceConstants {
     public static final String CERTIFICATE_REQUEST_CERT_ISSUED_CA = "CERTIFICATE_REQUEST_CERT_ISSUED_CA";
     public static final String CERTIFICATE_REQUEST_CERT_IMPORTED_SSA = "CERTIFICATE_REQUEST_CERT_IMPORTED_SSA";
 
+    public static final String REVOKE_REQUEST_PENDING = "REVOKE_REQUEST_PENDING";
+    public static final String REVOKE_REQUEST_PROCESSING = "REVOKE_REQUEST_PROCESSING";
+    public static final String REVOKE_REQUEST_APPROVED = "REVOKE_REQUEST_APPROVED";
+    public static final String REVOKE_REQUEST_REJECTED = "REVOKE_REQUEST_REJECTED";
+
     public static final String COMMON_NAME = "common_name";
     public static final String GIVEN_NAME = "given_name";
     public static final String SURNAME = "surname";

@@ -4,10 +4,13 @@ import com.ivan.ra.service.controller.RaRequestController;
 import com.ivan.ra.service.https.HttpsClient;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
+@Component
 public class SsaClient {
 
     @Value("${ssa.client.auth.p12.path}")
@@ -39,8 +42,13 @@ public class SsaClient {
         logger.info("HTTP status code: " + httpStatus);
         String responseBody = httpsClient.getResponseBody();
 
-        if (httpStatus != 200) {
-            throw new Exception(httpsClient.getResponseBody() != null ? httpsClient.getResponseBody() : "");
+        if (httpStatus == 400) {
+            JSONParser responseParser = new JSONParser();
+            JSONObject responseJson = (JSONObject) responseParser.parse(responseBody);
+            JSONArray errors = (JSONArray) responseJson.get("errors");
+            throw new SsaException((String)errors.get(0));
+        } else if (httpStatus == 500) {
+            throw new Exception("internal error occurred during processing of request");
         }
         JSONParser responseParser = new JSONParser();
         JSONObject responseJson = (JSONObject) responseParser.parse(responseBody);
@@ -59,8 +67,13 @@ public class SsaClient {
         logger.info("HTTP status code: " + httpStatus);
         String responseBody = httpsClient.getResponseBody();
 
-        if (httpStatus != 200) {
-            throw new Exception(httpsClient.getResponseBody() != null ? httpsClient.getResponseBody() : "");
+        if (httpStatus == 400) {
+            JSONParser responseParser = new JSONParser();
+            JSONObject responseJson = (JSONObject) responseParser.parse(responseBody);
+            JSONArray errors = (JSONArray) responseJson.get("errors");
+            throw new SsaException((String)errors.get(0));
+        } else if (httpStatus == 500) {
+            throw new Exception("internal error occurred during processing of request");
         }
         JSONParser responseParser = new JSONParser();
         JSONObject responseJson = (JSONObject) responseParser.parse(responseBody);
@@ -77,8 +90,15 @@ public class SsaClient {
         httpsClient.sendHttpPostRequest(ssaServiceUrl+"/ssa/v1/certificate", body.toJSONString().getBytes());
         int httpStatus = httpsClient.getHttpStatus();
         logger.info("HTTP status code: " + httpStatus);
-        if (httpStatus != 200) {
-            throw new Exception(httpsClient.getResponseBody() != null ? httpsClient.getResponseBody() : "");
+        if (httpStatus == 400) {
+            String responseBody = httpsClient.getResponseBody();
+
+            JSONParser responseParser = new JSONParser();
+            JSONObject responseJson = (JSONObject) responseParser.parse(responseBody);
+            JSONArray errors = (JSONArray) responseJson.get("errors");
+            throw new SsaException((String)errors.get(0));
+        } else if (httpStatus == 500) {
+            throw new Exception("internal error occurred during processing of request");
         }
     }
 
@@ -90,8 +110,15 @@ public class SsaClient {
         httpsClient.sendHttpPostRequest(ssaServiceUrl+"/ssa/v1/send/otp", body.toJSONString().getBytes());
         int httpStatus = httpsClient.getHttpStatus();
         logger.info("HTTP status code: " + httpStatus);
-        if (httpStatus != 200) {
-            throw new Exception(httpsClient.getResponseBody() != null ? httpsClient.getResponseBody() : "");
+        if (httpStatus == 400) {
+            String responseBody = httpsClient.getResponseBody();
+
+            JSONParser responseParser = new JSONParser();
+            JSONObject responseJson = (JSONObject) responseParser.parse(responseBody);
+            JSONArray errors = (JSONArray) responseJson.get("errors");
+            throw new SsaException((String)errors.get(0));
+        } else if (httpStatus == 500) {
+            throw new Exception("internal error occurred during processing of request");
         }
     }
 }

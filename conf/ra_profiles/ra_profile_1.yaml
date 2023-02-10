@@ -17,3 +17,5 @@ subject_info:
   common_name: ""
   surname: ""
   given_name: ""
+
+cert_profile: cert_profile_001

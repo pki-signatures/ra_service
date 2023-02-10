@@ -45,8 +45,17 @@ public class RegistrationAuthorityRequest {
     @Column(name = "ssa_id", nullable = true, length = 100)
     private String ssaId;
 
-    @Column(name = "certificate", nullable = true, columnDefinition = "TEXT")
-    private String certificate;
+    @Column(name = "ccr", nullable = true, columnDefinition = "TEXT")
+    private String csr;
+
+    @Column(name = "end_entity_certificate", nullable = true, columnDefinition = "TEXT")
+    private String endEntityCertificate;
+
+    @Column(name = "issuer_certificate", nullable = true, columnDefinition = "TEXT")
+    private String issuerCertificate;
+
+    @Column(name = "revocation_code", nullable = true, length = 100)
+    private String revocationCode;
 
     @JoinColumns({
             @JoinColumn(name = "request_subject_id", referencedColumnName = "id")

@@ -15,4 +15,7 @@ public class RaProfileVO {
 
     @JsonProperty("subject_info")
     private SubjectInfoVO subjectInfo;
+
+    @JsonProperty("cert_profile")
+    private String certProfile;
 }

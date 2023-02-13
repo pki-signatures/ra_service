@@ -31,6 +31,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.bouncycastle.cert.X509CertificateHolder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
@@ -41,6 +42,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletRequest;
@@ -56,9 +58,11 @@ import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 
+@RestController
 public class RaRequestController {
     @Autowired
     ErrorResponse errorResponse;
@@ -532,7 +536,7 @@ public class RaRequestController {
             String raName = regAuthReq.getRegistrationAuthorityRequestPK().getRegistrationAuthority().getName();
             String requestId = regAuthReq.getRegistrationAuthorityRequestPK().getId();
 
-            Path path = Paths.get(emailTemplatesDirPath + raName + "/request_rejection_email.html");
+            Path path = Paths.get(emailTemplatesDirPath + raName + "/cert_request_rejection_email.html");
             String emailTemplate = new String(Files.readAllBytes(path));
             emailTemplate = emailTemplate.replace("<REQUEST_ID>", requestId);
             emailTemplate = emailTemplate.replace("<REJECTION_REASON>", request.getRejectionReason());
@@ -799,11 +803,24 @@ public class RaRequestController {
                 return errorResponse.generateErrorResponse("cannot approve as request status is not "+
                         RaServiceConstants.REVOKE_REQUEST_PROCESSING);
             }
+            caClient.revokeCert(regAuthReq.getEndEntityCertificate(), regAuthReq.getIssuerCertificate(), request.getRevocationReason());
+            ssaClient.revokeCertificate(regAuthReq.getSsaId());
 
+            regAuthReq.setStatus(RaServiceConstants.REVOKE_REQUEST_APPROVED);
+            raRequestRepository.save(regAuthReq);
 
+            X509CertificateHolder subject = new X509CertificateHolder(Base64.getDecoder().decode(regAuthReq.getEndEntityCertificate()));
+            String raName = regAuthOperatorAuth.getRegistrationAuthorityPK().getRegistrationAuthority().getName();
+            Path path = Paths.get(emailTemplatesDirPath + raName + "/certificate_revocation_success.html");
+            String emailTemplate = new String(Files.readAllBytes(path));
+            emailTemplate = emailTemplate.replace("<RA_NAme>", raName);
+            emailTemplate = emailTemplate.replace("<REQUEST_ID>", request.getRequestId());
+            emailTemplate = emailTemplate.replace("<SUBJECT_DN>", subject.getSubject().toString());
+            emailService.sendRequestRejectionEmail(regAuthReq.getEmailAddress(), emailTemplate);
+            logger.info("email sent for request id: " + request.getRequestId() + " and RA: " + raName);
 
-
-            return null;
+            logger.info("revoke request approved successfully");
+            return ResponseEntity.ok().build();
         } catch (Exception ex) {
             logger.error("", ex);
             return ResponseEntity.internalServerError().build();
@@ -812,6 +829,51 @@ public class RaRequestController {
 
     @PostMapping(value = "/ra/v1/registration/authority/revoke/request/reject", produces = "application/json", consumes = "application/json")
     public ResponseEntity rejectRevokeRequest(@Valid @RequestBody RejectRevokeRequest request, HttpServletRequest httpRequest) {
-        return null;
+        try {
+            logger.info("reject revocation request received");
+            RegistrationAuthorityOperator regAuthOperatorAuth = authService.authenticateRaOperator(httpRequest);
+            if (regAuthOperatorAuth == null) {
+                return errorResponse.generateErrorResponse("TLS client certificate authentication failed");
+            }
+            if (regAuthOperatorAuth.getStatus().equals(RaServiceConstants.STATUS_DISABLED)) {
+                return errorResponse.generateErrorResponse("RA operator status is disabled");
+            }
+            if (regAuthOperatorAuth.getRegistrationAuthorityPK().getRegistrationAuthority().
+                    getStatus().equals(RaServiceConstants.STATUS_DISABLED)) {
+                return errorResponse.generateErrorResponse("RA status is disabled");
+            }
+            if (!regAuthOperatorAuth.getRole().contains(RaServiceConstants.REJECT_REQUESTS)) {
+                return errorResponse.generateErrorResponse("RA operator not authorized to reject revoke request");
+            }
+            List<RegistrationAuthorityRequest> reqList = raRequestRepository.findRequestByIdAndRa(request.getRequestId(),
+                    regAuthOperatorAuth.getRegistrationAuthorityPK().getRegistrationAuthority().getName());
+            if (reqList.size() == 0) {
+                logger.info("no request with this ID already present: " + request.getRequestId());
+                return errorResponse.generateErrorResponse("no request with this ID already present: " + request.getRequestId());
+            }
+            RegistrationAuthorityRequest regAuthReq = reqList.get(0);
+            if (!regAuthReq.getStatus().equals(RaServiceConstants.REVOKE_REQUEST_PROCESSING)) {
+                return errorResponse.generateErrorResponse("cannot reject request as request status is not "+
+                        RaServiceConstants.REVOKE_REQUEST_PROCESSING);
+            }
+            regAuthReq.setStatus(RaServiceConstants.REVOKE_REQUEST_REJECTED);
+            regAuthReq.setRejectionReason(request.getRejectionReason());
+            raRequestRepository.save(regAuthReq);
+
+            String raName = regAuthOperatorAuth.getRegistrationAuthorityPK().getRegistrationAuthority().getName();
+            Path path = Paths.get(emailTemplatesDirPath + raName + "/revoke_request_rejection_email.html");
+            String emailTemplate = new String(Files.readAllBytes(path));
+            emailTemplate = emailTemplate.replace("<RA_NAme>", raName);
+            emailTemplate = emailTemplate.replace("<REQUEST_ID>", request.getRequestId());
+            emailTemplate = emailTemplate.replace("<REJECTION_REASON>", request.getRejectionReason());
+            emailService.sendRequestRejectionEmail(regAuthReq.getEmailAddress(), emailTemplate);
+            logger.info("rejection email sent for request id: " + request.getRequestId() + " and RA: " + raName);
+
+            logger.info("revoke request rejected response sent");
+            return ResponseEntity.ok().build();
+        } catch (Exception ex) {
+            logger.error("", ex);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 }

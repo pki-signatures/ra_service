@@ -121,4 +121,24 @@ public class SsaClient {
             throw new Exception("internal error occurred during processing of request");
         }
     }
+
+    public void revokeCertificate(String ssaId) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("ssa_id", ssaId);
+
+        HttpsClient httpsClient = new HttpsClient(clientAuthP12Path, clientAuthP12Password, trustStorePath, trustStorePassword);
+        httpsClient.sendHttpPostRequest(ssaServiceUrl+"/ssa/v1/certificate/revoke", body.toJSONString().getBytes());
+        int httpStatus = httpsClient.getHttpStatus();
+        logger.info("HTTP status code: " + httpStatus);
+        if (httpStatus == 400) {
+            String responseBody = httpsClient.getResponseBody();
+
+            JSONParser responseParser = new JSONParser();
+            JSONObject responseJson = (JSONObject) responseParser.parse(responseBody);
+            JSONArray errors = (JSONArray) responseJson.get("errors");
+            throw new SsaException((String)errors.get(0));
+        } else if (httpStatus == 500) {
+            throw new Exception("internal error occurred during processing of request");
+        }
+    }
 }

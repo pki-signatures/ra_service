@@ -5,11 +5,14 @@ import com.ivan.ra.service.model.RequestSubjectInfo;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.bouncycastle.cert.X509CertificateHolder;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+
+import java.util.Base64;
 
 @Component
 public class CaClient {
@@ -82,4 +85,33 @@ public class CaClient {
         String issuerCert = (String)responseJson.get("ca_certificate");
         return new String[]{endEntityCert, issuerCert};
     }
+
+    public void revokeCert(String endEntityCert, String issuerCert, String revocationReason) throws Exception {
+        X509CertificateHolder issuer = new X509CertificateHolder(Base64.getDecoder().decode(issuerCert));
+        String issuerName = issuer.getSubject().toString();
+
+        X509CertificateHolder subject = new X509CertificateHolder(Base64.getDecoder().decode(endEntityCert));
+        String serialNumber = subject.getSerialNumber().toString(16);
+
+        JSONObject body = new JSONObject();
+        body.put("issuer_name", issuerName);
+        body.put("serial_number", serialNumber);
+        body.put("revocation_reason", revocationReason);
+
+        HttpsClient httpsClient = new HttpsClient(clientAuthP12Path, clientAuthP12Password, trustStorePath, trustStorePassword);
+        httpsClient.sendHttpPostRequest(caServiceUrl+"/ca/v1/revoke/cert", body.toJSONString().getBytes());
+        int httpStatus = httpsClient.getHttpStatus();
+        logger.info("HTTP status code: " + httpStatus);
+        String responseBody = httpsClient.getResponseBody();
+
+        if (httpStatus == 400) {
+            JSONParser responseParser = new JSONParser();
+            JSONObject responseJson = (JSONObject) responseParser.parse(responseBody);
+            String error = (String) responseJson.get("error_description");
+            throw new Exception(error);
+        } else if (httpStatus == 500) {
+            throw new Exception("internal error occurred during processing of request");
+        }
+    }
+
 }
